@@ -183,3 +183,5 @@ This project was inspired by the article:
 https://medium.com/@suyashnyn1/observing-ethereums-mempool-directly-with-reth-d404919cae79
 
 The implementation was independently developed and adapted for a different architecture and use case.
+
+---

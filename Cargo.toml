@@ -1,0 +1,37 @@
+[package]
+name = "eth-p2p-mempool-listener"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Reth stack
+reth = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-network = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-network-api = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-discv4 = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-eth-wire = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-tasks = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+reth-provider = { git = "https://github.com/paradigmxyz/reth", default-features = false }
+redis = { version = "0.28", features = ["aio", "tokio-comp"] }
+
+# Crypto
+secp256k1 = { version = "0.30.0", features = ["global-context", "recovery"] }
+
+# Async
+tokio = { version = "1.44.2", features = ["full"] }
+futures-util = "0.3.31"
+
+# CLI & errors
+clap = { version = "4.5.35", features = ["derive"] }
+anyhow = "1.0.97"
+
+# Logging
+tracing = "0.1.41"
+tracing-subscriber = "0.3"
+
+# Utils/config
+hex = "0.4.3"
+dashmap = "6.1.0"
+config = "0.15.11"
+serde = { version = "1.0.219", features = ["derive"] }

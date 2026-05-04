@@ -107,6 +107,8 @@ The system is designed to be easily extended:
 * Support multiple peers and horizontal scaling
 * Integrate with analytics or alerting systems
 
+---
+
 ## Requirements
 
 Before running the project, make sure you have:

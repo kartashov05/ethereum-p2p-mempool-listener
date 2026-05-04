@@ -73,6 +73,7 @@ A minimal Python script demonstrates how to read and decode transactions from Re
 ## Configuration
 
 Configuration is shared via a `config.toml` file
+
 Used by both Rust and Python components.
 
 ---

@@ -123,8 +123,8 @@ Before running the project, make sure you have:
 Clone the repository:
 
 ```bash
-git clone <repo-url>
-cd <repo-name>
+git clone https://github.com/kartashov05/ethereum-p2p-mempool-listener.git
+cd ethereum-p2p-mempool-listener
 ````
 
 ---

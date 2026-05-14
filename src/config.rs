@@ -30,6 +30,8 @@ struct CliArgs {
         help = "Path to the configuration file"
     )]
     config_path: PathBuf,
+    #[clap(long, help = "Metrics HTTP listener address")]
+    metrics_listen_addr: Option<SocketAddr>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -41,6 +43,7 @@ pub struct Config {
     pub max_peers_outbound: usize,
     pub max_peers_inbound: usize,
     pub redis_url: String,
+    pub metrics_listen_addr: SocketAddr,
 }
 
 pub fn load_config() -> Result<Config> {
@@ -60,13 +63,19 @@ pub fn load_config() -> Result<Config> {
     } else {
         config_builder
     };
+    let config_builder = if let Some(addr) = cli_args.metrics_listen_addr {
+        config_builder.set_override("metrics_listen_addr", addr.to_string())?
+    } else {
+        config_builder
+    };
 
     let settings = config_builder
         .set_default("p2p_listen_addr", "0.0.0.0:30313")?
         .set_default("discv4_listen_addr", "0.0.0.0:30314")?
-        .set_default("max_peers_outbound", 128)?
-        .set_default("max_peers_inbound", 128)?
+        .set_default("max_peers_outbound", 16)?
+        .set_default("max_peers_inbound", 16)?
         .set_default("redis_url", "redis://127.0.0.1:6379/0")?
+        .set_default("metrics_listen_addr", "0.0.0.0:9100")?
         .build()?;
 
     let mut app_config: Config = settings.try_deserialize()?;

@@ -1,8 +1,10 @@
+# node_key_file = ""
+
 # P2P TCP listener address and port
-p2p_listen_addr = "0.0.0.0:30313"
+p2p_listen_addr = "0.0.0.0:30303"
 
 # Discovery v4 UDP listener address and port
-discv4_listen_addr = "0.0.0.0:30314"
+discv4_listen_addr = "0.0.0.0:30303"
 
 # Optional: List of bootnodes (enode URLs)
 # bootnodes = [
@@ -11,10 +13,13 @@ discv4_listen_addr = "0.0.0.0:30314"
 # ]
 
 # Maximum number of outgoing peer connections
-max_peers_outbound = 128
+max_peers_outbound = 32
 
 # Maximum number of incoming peer connections
-max_peers_inbound = 128
+max_peers_inbound = 16
 
 # Redis URL
 redis_url = "redis://127.0.0.1:6379/0"
+
+# Metrics
+metrics_listen_addr = "0.0.0.0:9100"

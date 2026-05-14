@@ -1,3 +1,4 @@
+use crate::metrics;
 use anyhow::Result;
 use dashmap::DashMap;
 use reth::primitives::{PooledTransaction, TransactionSigned};
@@ -51,6 +52,7 @@ impl EthP2PHandler {
             session_info: Arc::clone(&session_info),
         };
         self.peers.insert(peer_id, peer_info_struct);
+        metrics::P2P_PEERS_CONNECTED.set(self.peers.len() as i64);
 
         println!("[DEBUG] EthP2PHandler: Peer added! New peer count: {}", self.peers.len());
     }
@@ -77,6 +79,7 @@ impl EthP2PHandler {
             PeerEvent::SessionClosed { peer_id, reason } => {
                 info!(target: "listener::network", %peer_id, ?reason, "Session closed");
                 self.peers.remove(&peer_id);
+                metrics::P2P_PEERS_CONNECTED.set(self.peers.len() as i64);
             }
             _ => {}
         }
@@ -93,6 +96,9 @@ impl EthP2PHandler {
                     trace!(target: "listener::tx", tx_hash=%tx_signed_arc.hash(), "Processing directly received TransactionSigned.");
                     let tx_to_send = tx_signed_arc.clone();
                     if let Err(e) = sender_clone.send(tx_to_send.into()) {
+                        metrics::PIPELINE_ERRORS_TOTAL
+                            .with_label_values(&["tx_forward"])
+                            .inc();
                         error!(target: "listener::tx", %peer_id, "Failed to send DIRECTLY received TransactionSigned: {}. Receiver likely dropped.", e);
                     } else {
                         debug!(target: "listener::tx", %peer_id, tx_hash=%tx_signed_arc.hash(), "Successfully forwarded DIRECTLY received TransactionSigned to processor task.");
@@ -126,6 +132,9 @@ impl EthP2PHandler {
                                     let pooled_tx: PooledTransaction = pooled_tx_ref.clone();
                                     let tx_signed: TransactionSigned = pooled_tx.into();
                                     if tx_signed.hash() != received_hash {
+                                        metrics::PIPELINE_ERRORS_TOTAL
+                                            .with_label_values(&["hash_mismatch"])
+                                            .inc();
                                         warn!(target: "listener::tx", received_hash=%received_hash, computed_hash=%tx_signed.hash(), "Hash mismatch on requested tx!");
                                     }
                                     let tx_signed_arc = Arc::new(tx_signed);
@@ -137,9 +146,15 @@ impl EthP2PHandler {
                                 }
                             }
                             Ok(Err(req_err)) => {
+                                metrics::PIPELINE_ERRORS_TOTAL
+                                    .with_label_values(&["pool_request"])
+                                    .inc();
                                 warn!(target: "listener::network", %peer_id, ?req_err, "GetPooledTransactions request failed")
                             }
                             Err(recv_err) => {
+                                metrics::PIPELINE_ERRORS_TOTAL
+                                    .with_label_values(&["pool_request"])
+                                    .inc();
                                 warn!(target: "listener::network", %peer_id, %recv_err, "Failed to receive GetPooledTransactions response")
                             }
                         }

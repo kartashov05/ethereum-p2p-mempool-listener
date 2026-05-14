@@ -1,5 +1,6 @@
 mod config;
 mod network;
+mod metrics;
 use crate::{
     config::{load_config, load_or_generate_key, parse_bootnodes},
     network::EthP2PHandler,
@@ -35,6 +36,7 @@ use reth_eth_wire::Encodable2718;
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
     let app_config = load_config()?;
+    metrics::init();
     info!("Starting Ethereum P2P Mempool Listener");
     println!("Loaded configuration: {:?}", app_config);
 
@@ -116,6 +118,23 @@ async fn main() -> Result<()> {
 
     let task_executor = &executor;
 
+    let metrics_addr = app_config.metrics_listen_addr;
+
+    task_executor.spawn(Box::pin(async move {
+        info!(
+            target: "listener::metrics",
+            %metrics_addr,
+            "Starting Prometheus metrics endpoint"
+        );
+
+        if let Err(err) = metrics::serve(metrics_addr).await {
+            error!(
+                target: "listener::metrics",
+                "Metrics endpoint failed: {err}"
+            );
+        }
+    }));
+
     let handler_clone_for_events = Arc::clone(&handler_arc);
     task_executor.spawn(Box::pin(async move {
         info!(target: "listener::events", "EVENT HANDLER TASK STARTED");
@@ -163,6 +182,8 @@ async fn main() -> Result<()> {
 
         info!(target: "listener::processor", "Starting decoded transaction processor task...");
         while let Some(tx_signed_arc) = decoded_tx_receiver.recv().await {
+            metrics::MEMPOOL_TX_SEEN_TOTAL.inc();
+
             let tx = tx_signed_arc.as_ref();
             let hash = *tx.hash();
             let now = Instant::now();
@@ -171,11 +192,15 @@ async fn main() -> Result<()> {
             {
                 let mut cache = cache_clone.write().await;
                 if cache.contains_key(&hash) {
+                    metrics::MEMPOOL_TX_DUPLICATES_TOTAL.inc();
+                    metrics::update_dedup_ratio();
                     trace!(target: "listener::processor", tx_hash=%hash, "Duplicate tx skipped in Rust");
                     continue;
                 }
 
                 cache.insert(hash, now);
+                metrics::MEMPOOL_TX_UNIQUE_TOTAL.inc();
+                metrics::update_dedup_ratio();
 
                 let mut order = order_clone.write().await;
                 order.push_back(hash);
@@ -200,11 +225,42 @@ async fn main() -> Result<()> {
             }
 
             let raw_tx = tx.encoded_2718();
-            if let Err(e) = conn
-                .rpush::<_, _, ()>("txs", raw_tx)
-                .await
-            {
-                error!(target: "listener::processor", "Redis RPUSH tx error: {e}");
+            let redis_push_started = Instant::now();
+
+            match conn.rpush::<_, _, ()>("txs", raw_tx).await {
+                Ok(()) => {
+                    metrics::REDIS_PUSH_TOTAL.inc();
+
+                    metrics::REDIS_PUSH_LATENCY_MS.observe(
+                        redis_push_started.elapsed().as_secs_f64() * 1000.0
+                    );
+
+                    match conn.llen::<_, i64>("txs").await {
+                        Ok(depth) => {
+                            metrics::REDIS_QUEUE_DEPTH.set(depth);
+                        }
+                        Err(err) => {
+                            metrics::PIPELINE_ERRORS_TOTAL
+                                .with_label_values(&["redis_queue_depth"])
+                                .inc();
+
+                            warn!(
+                                target: "listener::processor",
+                                "Redis LLEN txs error: {err}"
+                            );
+                        }
+                    }
+                }
+                Err(err) => {
+                    metrics::PIPELINE_ERRORS_TOTAL
+                        .with_label_values(&["redis_push"])
+                        .inc();
+
+                    error!(
+                        target: "listener::processor",
+                        "Redis RPUSH tx error: {err}"
+                    );
+                }
             }
         }
     }));
